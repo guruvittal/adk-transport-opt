@@ -152,7 +152,7 @@ The supply chain network spans **11 Regional Distribution Hubs** servicing **297
 
 ### **Mathematical Rate Card Cost Function**
 
-$$\text{Gross Spend} = C_{\text{fuel}} + C_{\text{wages}} + C_{\text{overtime}} + C_{\text{maintenance}} + C_{\text{tolls}} + C_{\text{stop\_fees}}$$
+$$\text{Gross Spend} = C_{\text{fuel}} + C_{\text{wages}} + C_{\text{overtime}} + C_{\text{maintenance}} + C_{\text{tolls}} + C_{\text{stop-fees}}$$
 
 $$\text{Net Daily Operational Spend} = \text{Gross Spend} - \sum (\text{Backhaul Revenue Credits})$$
 
