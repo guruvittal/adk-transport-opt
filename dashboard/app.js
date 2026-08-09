@@ -126,6 +126,24 @@ document.addEventListener('DOMContentLoaded', () => {
     if (typeof BQ_STORE_ORDERS_INLINED !== 'undefined') {
       bqRawStoreOrders = BQ_STORE_ORDERS_INLINED;
     }
+    
+  // Support URL query parameters ?hub=HUB_DEN_CO&tab=tab-usa-map
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has("hub")) {
+      const qHub = urlParams.get("hub");
+      selectedHubFilter = qHub;
+      const hubSelect = document.getElementById("hub-select");
+      if (hubSelect) hubSelect.value = qHub;
+    }
+    if (urlParams.has("tab")) {
+      const qTab = urlParams.get("tab");
+      setTimeout(() => switchTab(qTab), 150);
+    }
+  } catch (e) {
+    console.log("Query param parse note:", e);
+  }
+
     generateDailyPlanningData();
     renderShipmentsList();
     renderTruckMoves();
@@ -176,7 +194,25 @@ function onDayScenarioChange(scenario) {
   currentDayScenario = scenario;
   const mapSelect = document.getElementById('map-scenario-select');
   if (mapSelect) mapSelect.value = scenario;
-  generateDailyPlanningData();
+  
+  // Support URL query parameters ?hub=HUB_DEN_CO&tab=tab-usa-map
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has("hub")) {
+      const qHub = urlParams.get("hub");
+      selectedHubFilter = qHub;
+      const hubSelect = document.getElementById("hub-select");
+      if (hubSelect) hubSelect.value = qHub;
+    }
+    if (urlParams.has("tab")) {
+      const qTab = urlParams.get("tab");
+      setTimeout(() => switchTab(qTab), 150);
+    }
+  } catch (e) {
+    console.log("Query param parse note:", e);
+  }
+
+    generateDailyPlanningData();
   renderShipmentsList();
   renderTruckMoves();
   populateMapDropdowns();
@@ -208,7 +244,25 @@ function onMapControlChange() {
   const modeToolbarSelect = document.getElementById('planning-mode-select');
   if (modeToolbarSelect) modeToolbarSelect.value = mode;
 
-  generateDailyPlanningData();
+  
+  // Support URL query parameters ?hub=HUB_DEN_CO&tab=tab-usa-map
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has("hub")) {
+      const qHub = urlParams.get("hub");
+      selectedHubFilter = qHub;
+      const hubSelect = document.getElementById("hub-select");
+      if (hubSelect) hubSelect.value = qHub;
+    }
+    if (urlParams.has("tab")) {
+      const qTab = urlParams.get("tab");
+      setTimeout(() => switchTab(qTab), 150);
+    }
+  } catch (e) {
+    console.log("Query param parse note:", e);
+  }
+
+    generateDailyPlanningData();
   renderShipmentsList();
   renderTruckMoves();
   populateMapDropdowns();
