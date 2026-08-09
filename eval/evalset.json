@@ -1,0 +1,39 @@
+[
+  {
+    "eval_id": "eval_louisville_wednesday",
+    "description": "Evaluates Louisville Hub Wednesday store order summary and bigquery grounding",
+    "hub_id": "HUB_LOU_KY",
+    "turns": [
+      {
+        "user_input": "Summarize Wednesday store orders for Louisville Hub",
+        "expected_keywords": ["Louisville", "orders", "Wednesday", "pallets"]
+      }
+    ]
+  },
+  {
+    "eval_id": "eval_denver_castle_rock_backhaul",
+    "description": "Evaluates multi-turn Denver truck inquiry for TRK-DEN-801 circling Castle Rock CO",
+    "hub_id": "HUB_DEN_CO",
+    "turns": [
+      {
+        "user_input": "I am looking for TRK-DEN-801",
+        "expected_keywords": ["TRK-DEN-801"]
+      },
+      {
+        "user_input": "Is it circling castle rock",
+        "expected_keywords": ["Castle Rock Dairy Processor", "SUP-808", "credit"]
+      }
+    ]
+  },
+  {
+    "eval_id": "eval_supplier_map_grounding",
+    "description": "Evaluates UI Leaflet map supplier marker grounding guidance",
+    "hub_id": "HUB_DEN_CO",
+    "turns": [
+      {
+        "user_input": "Why are not supplier pickups marked on the map",
+        "expected_keywords": ["Green Factory Icons", "Alpha Evolved Plan"]
+      }
+    ]
+  }
+]

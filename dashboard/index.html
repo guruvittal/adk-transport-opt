@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logistics Fleet Route Optimizer - Dispatch Control Center</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Leaflet Map CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="light-theme">
+
+  <!-- App Header -->
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-logo">🚚</div>
+      <div class="brand-info">
+        <h1>Logistics Fleet Route Optimizer</h1>
+        <span class="sub-text">Daily Outbound Planning & Cost Engineering • BigQuery Dataset: vertexsearch-447722</span>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button class="tab-btn active" onclick="switchTab('tab-daily-planning')">
+        <span class="tab-icon">📋</span> Daily Planning (Shipments & Trucks)
+      </button>
+      <button class="tab-btn" onclick="switchTab('tab-cost-summary')">
+        <span class="tab-icon">📊</span> Naive vs. Optimized Spend
+      </button>
+      <button class="tab-btn" onclick="switchTab('tab-assumptions')">
+        <span class="tab-icon">🧮</span> Assumptions & Cost Formulas
+      </button>
+      <button class="tab-btn" onclick="switchTab('tab-usa-map')">
+        <span class="tab-icon">🗺️</span> USA Interactive Map
+      </button>
+      <button class="tab-btn" onclick="switchTab('tab-why-winning')">
+        <span class="tab-icon">🏆</span> Why This Solution Won
+      </button>
+    </nav>
+
+    <div class="header-status">
+      <span class="status-badge bq-connected">
+        <span class="dot"></span> BigQuery Synchronized
+      </span>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="content-container">
+
+    <!-- =================================================================== -->
+    <!-- TAB 1: DAILY PLANNING (LEFT: SHIPMENTS | RIGHT: TRUCK MOVES)         -->
+    <!-- =================================================================== -->
+    <section id="tab-daily-planning" class="tab-content active">
+      <div class="planning-toolbar">
+        <div class="toolbar-title">
+          <h2>Daily Planning Schedule • Dynamic Order Demand</h2>
+          <p>Select a daily demand scenario to see how <strong>Alpha Evolve</strong> dynamically re-optimizes routes as store volume fluctuates throughout the week.</p>
+        </div>
+        <div class="toolbar-controls" style="display: flex; gap: 16px; align-items: center;">
+          <div>
+            <label for="day-scenario-select"><strong>📅 Demand Scenario:</strong></label>
+            <select id="day-scenario-select" onchange="onDayScenarioChange(this.value)">
+              <option value="WED">Wed, Aug 5, 2026 (Regular Mid-Week • 107 Store Orders)</option>
+              <option value="FRI">Fri, Aug 7, 2026 (Weekend Peak Surge • 185 Store Orders)</option>
+              <option value="MON">Mon, Aug 3, 2026 (Light Start-of-Week • 66 Store Orders)</option>
+            </select>
+          </div>
+          <div>
+            <label for="hub-filter-select"><strong>🏢 Regional Hub:</strong></label>
+            <select id="hub-filter-select" onchange="onHubFilterChange(this.value)">
+              <option value="ALL">All 11 Regional Hubs (USA)</option>
+              <option value="HUB_ATL_GA">Atlanta Hub (GA)</option>
+              <option value="HUB_DAL_TX">Dallas Hub (TX)</option>
+              <option value="HUB_LOU_KY">Louisville Hub (KY)</option>
+              <option value="HUB_RAL_NC">Raleigh Hub (NC)</option>
+              <option value="HUB_NJ_NJ">New Jersey Hub (NJ)</option>
+              <option value="HUB_PA_PA">Pennsylvania Hub (PA)</option>
+              <option value="HUB_ORL_FL">Orlando Hub (FL)</option>
+              <option value="HUB_DEN_CO">Denver Hub (CO)</option>
+              <option value="HUB_PHX_AZ">Phoenix Hub (AZ)</option>
+              <option value="HUB_POR_OR">Portland Hub (OR)</option>
+              <option value="HUB_DSM_IA">Des Moines Hub (IA)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Master-Detail Split Screen Layout -->
+      <div class="split-layout">
+        <!-- LEFT PANEL: Daily Store Shipments -->
+        <div class="split-panel left-panel">
+          <div class="panel-header">
+            <h3>📦 Store Shipments (<span id="shipment-count">10</span> Orders • <span id="shipment-weight" style="color: var(--accent-primary);">70,000</span> lbs)</h3>
+            <span class="badge info">Wed, Aug 5, 2026</span>
+          </div>
+
+          <div class="search-box">
+            <input type="text" id="shipment-search" placeholder="Search Store ID (e.g. STORE_GA_1001)..." onkeyup="filterShipments()">
+          </div>
+
+          <div class="shipment-list" id="shipment-list-container">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+
+        <!-- RIGHT PANEL: Planned Truck Moves -->
+        <div class="split-panel right-panel">
+          <div class="panel-header" style="align-items: flex-start;">
+            <div>
+              <h3>🚛 Planned Truck Moves</h3>
+              <div class="sub-text">Switch planning mode below to see the difference clearly</div>
+            </div>
+            <select id="planning-mode-select" onchange="onPlanningModeChange(this.value)" style="padding: 6px 12px; border-radius: 8px; border: 1.5px solid var(--border-color); font-size: 13px; font-weight: 700; color: var(--text-dark); background: var(--bg-main); cursor: pointer;">
+              <option value="OPTIMAL">✨ Optimal Planning (Evolved)</option>
+              <option value="NAIVE">⚠️ Naive Planning (Baseline)</option>
+            </select>
+          </div>
+
+          <!-- Hub Operational Metrics KPI Bar -->
+          <div class="right-panel-kpi-bar" id="right-panel-kpi-bar">
+            <div class="r-kpi"><span>Trucks:</span> <strong id="kpi-trucks">5</strong></div>
+            <div class="r-kpi"><span>Drivers:</span> <strong id="kpi-drivers">5</strong></div>
+            <div class="r-kpi"><span>Distance:</span> <strong id="kpi-distance">1,240 mi</strong></div>
+            <div class="r-kpi"><span>Daily Cost:</span> <strong id="kpi-cost">$3,420</strong></div>
+            <div class="r-kpi"><span id="kpi-savings-badge" class="badge success">+$860 (20.1% Savings)</span></div>
+          </div>
+
+          <div class="truck-moves-container" id="truck-moves-container">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- TAB 2: NAIVE VS OPTIMIZED COST VISUALS                               -->
+    <!-- =================================================================== -->
+    <section id="tab-cost-summary" class="tab-content">
+      <div class="cost-summary-header">
+        <h2>Daily Outbound Spend Comparison: Naive vs. Optimized Planning</h2>
+        <p>Grounded in real fleet operations (~$90M–$100M annual logistics budget across 297 store locations).</p>
+      </div>
+
+      <!-- High Impact Operational KPI Bar -->
+      <div class="kpi-banner-grid">
+        <div class="kpi-banner-item">
+          <div class="kpi-banner-label">Daily Net Savings</div>
+          <div class="kpi-banner-value text-green">$43,270 / day</div>
+          <div class="kpi-banner-sub">$15.79M Annualized Savings</div>
+        </div>
+        <div class="kpi-banner-item">
+          <div class="kpi-banner-label">Active Drivers Needed</div>
+          <div class="kpi-banner-value">108 vs 142</div>
+          <div class="kpi-banner-sub text-green">34 Fewer Drivers Needed</div>
+        </div>
+        <div class="kpi-banner-item">
+          <div class="kpi-banner-label">Active Trucks Needed</div>
+          <div class="kpi-banner-value">92 vs 118</div>
+          <div class="kpi-banner-sub text-green">26 Fewer Power Units</div>
+        </div>
+        <div class="kpi-banner-item">
+          <div class="kpi-banner-label">Daily Fleet Miles</div>
+          <div class="kpi-banner-value">88,420 miles</div>
+          <div class="kpi-banner-sub text-green">16,148 Miles Saved / Day</div>
+        </div>
+      </div>
+
+      <!-- Why Mileage Decreased Callout Card -->
+      <div class="visual-breakdown-card" style="margin-bottom: 24px; border-left: 6px solid var(--accent-primary);">
+        <h3 style="color: var(--accent-primary);">💡 Why Total Truck Mileage & Runs Are Lower in the Optimized Plan</h3>
+        <div class="grid-2col" style="margin-top: 12px; gap: 16px;">
+          <div>
+            <strong>1. Regional Hub Border Swapping (Stem Mile Elimination):</strong>
+            <p style="font-size: 13px; color: var(--text-body); margin-top: 4px;">
+              In naive planning, stores are strictly assigned to default primary hubs. For example, a GA/NC border store was dispatched 180 miles round-trip from Atlanta (`HUB_ATL_GA`), even though Raleigh (`HUB_RAL_NC`) was only 45 miles away. Dynamically swapping border stores eliminates 90–135 stem miles per border route.
+            </p>
+          </div>
+          <div>
+            <strong>2. Route Density & Stop Consolidation (26 Fewer Return Trips):</strong>
+            <p style="font-size: 13px; color: var(--text-body); margin-top: 4px;">
+              Naive routing ran 118 low-density truck runs with unoptimized empty legs. By consolidating 2–3 nearby store deliveries onto multi-temp 53ft trailers under weight/pallet limits, required truck runs dropped from 118 down to 92 (eliminating 26 redundant empty depot return trips).
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Side-by-Side Cost Cards -->
+      <div class="cost-comparison-grid">
+        <div class="cost-card naive-card">
+          <div class="card-tag">Baseline Planning</div>
+          <h3>Naive Daily Spend</h3>
+          <div class="cost-value text-red" id="naive-spend-val">$285,420 / day</div>
+          <div class="card-desc">Created via static primary hub rules, fixed 01:00 AM dispatches, unoptimized store sequencing, and zero backhauls.</div>
+          <ul class="cost-list">
+            <li><span>Fuel Expenses (104,568 mi @ 6.2 MPG):</span> <strong>$64,933.61</strong></li>
+            <li><span>Driver Base Wages (2,317.9 hrs @ $28.50):</span> <strong>$66,060.15</strong></li>
+            <li><span>Driver Overtime (485 hrs @ $42.75):</span> <strong class="text-red">$20,733.75</strong></li>
+            <li><span>Maintenance (104,568 mi @ $0.18/mi):</span> <strong>$18,822.24</strong></li>
+            <li><span>Fixed Stop Fees & Tolls:</span> <strong>$12,536.00</strong></li>
+            <li><span>Matched Supplier Backhauls:</span> <strong>-$2,520.00 (21 legs)</strong></li>
+          </ul>
+        </div>
+
+        <div class="cost-card vs-divider">
+          <div class="vs-circle">VS</div>
+          <div class="savings-pill">
+            <div class="savings-amount">$43,270 / day</div>
+            <div class="savings-label">15.2% Daily Net Savings</div>
+          </div>
+        </div>
+
+        <div class="cost-card optimized-card">
+          <div class="card-tag tag-success">Evolved Planning</div>
+          <h3>Optimized Daily Spend</h3>
+          <div class="cost-value text-green" id="opt-spend-val">$242,150 / day</div>
+          <div class="card-desc">Created via multi-depot border swapping, dynamic dispatch window alignment, and supplier backhaul detour matching.</div>
+          <ul class="cost-list">
+            <li><span>Fuel Expenses (88,420 mi @ 6.2 MPG):</span> <strong class="text-green">$54,905.10 (-$10.0K)</strong></li>
+            <li><span>Driver Base Wages (2,216 hrs @ $28.50):</span> <strong class="text-green">$63,156.00 (-$2.9K)</strong></li>
+            <li><span>Driver Overtime (142 hrs @ $42.75):</span> <strong class="text-green">$6,070.50 (-70.7%)</strong></li>
+            <li><span>Maintenance (88,420 mi @ $0.18/mi):</span> <strong class="text-green">$15,915.60 (-$2.9K)</strong></li>
+            <li><span>Fixed Stop Fees & Tolls:</span> <strong>$11,462.80</strong></li>
+            <li><span>Matched Supplier Backhauls:</span> <strong class="text-green">-$9,360.00 (78 legs)</strong></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- TAB 3: ASSUMPTIONS & EXACT COST FORMULAS (EXPLICIT CALLOUT)         -->
+    <!-- =================================================================== -->
+    <section id="tab-assumptions" class="tab-content">
+      <div class="winning-header">
+        <h2>Operational Rate Card Assumptions & Mathematical Derivations</h2>
+        <p>Explicit line-by-line formulas explaining exactly how fuel, driver wages, maintenance, and overtime expenses are calculated.</p>
+      </div>
+
+      <!-- Rate Card Constants Table -->
+      <div class="section-card" style="margin-bottom: 24px;">
+        <h3>1. Primary Industry Rate Card Parameters (`cost_rate_cards`)</h3>
+        <div class="table-container" style="margin-top: 12px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Parameter Name</th>
+                <th>Standard Rate</th>
+                <th>Unit</th>
+                <th>Operational Context / Derivation Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Fuel Price per Gallon</strong></td>
+                <td><strong>$3.85</strong></td>
+                <td>USD / Gallon</td>
+                <td>National average commercial diesel price.</td>
+              </tr>
+              <tr>
+                <td><strong>Tractor Fuel Economy</strong></td>
+                <td><strong>6.2 MPG</strong></td>
+                <td>Miles / Gallon</td>
+                <td>Class 8 reefer tractor average fuel efficiency under full payload load.</td>
+              </tr>
+              <tr>
+                <td><strong>Driver Base Wage</strong></td>
+                <td><strong>$28.50</strong></td>
+                <td>USD / Hour</td>
+                <td>CDL-A dedicated fleet driver hourly base pay (applies up to 8 hours/shift).</td>
+              </tr>
+              <tr>
+                <td><strong>Driver Overtime Multiplier</strong></td>
+                <td><strong>1.5x ($42.75/hr)</strong></td>
+                <td>Multiplier</td>
+                <td>Applies after 8 hours on shift under DOT Hours of Service regulations.</td>
+              </tr>
+              <tr>
+                <td><strong>Maintenance Rate</strong></td>
+                <td><strong>$0.18</strong></td>
+                <td>USD / Mile</td>
+                <td>Tire wear, scheduled PMs, reefer engine maintenance, and brake wear per mile.</td>
+              </tr>
+              <tr>
+                <td><strong>Fixed Stop Fee</strong></td>
+                <td><strong>$15.00</strong></td>
+                <td>USD / Drop</td>
+                <td>Fixed administrative & dock handling allocation per store delivery drop.</td>
+              </tr>
+              <tr>
+                <td><strong>Supplier Backhaul Credit</strong></td>
+                <td><strong>-$120.00</strong></td>
+                <td>USD / Pickup Leg</td>
+                <td>Net revenue credit captured when picking up raw commodities on return trip to hub.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Detailed Calculation Formulas -->
+      <div class="grid-2col">
+        <div class="info-box-card">
+          <h3>2. Fuel & Maintenance Formulas</h3>
+          <div class="formula-card">
+            <div class="formula-header">Fuel Expense Derivation</div>
+            <div class="formula-body">
+              <span class="eq-main">Fuel Cost</span> = 
+              <span class="eq-bracket">(</span>
+              <span class="eq-term">Total Fleet Miles</span> ÷ <span class="eq-term">6.2 MPG</span>
+              <span class="eq-bracket">)</span> × 
+              <span class="eq-credit">$3.85 / Gallon</span>
+            </div>
+            <p style="margin-top: 8px; font-size: 12.5px; color: var(--text-body);">
+              • Baseline: (104,568 mi ÷ 6.2) × $3.85 = <strong>$64,933.61 / day</strong><br>
+              • Optimized: (88,420 mi ÷ 6.2) × $3.85 = <strong>$54,905.10 / day</strong><br>
+              • <strong>Fuel Savings: $10,028.51 / day</strong>
+            </p>
+          </div>
+
+          <div class="formula-card" style="margin-top: 16px;">
+            <div class="formula-header">Maintenance Expense Derivation</div>
+            <div class="formula-body">
+              <span class="eq-main">Maintenance Cost</span> = 
+              <span class="eq-term">Total Fleet Miles</span> × 
+              <span class="eq-credit">$0.18 / Mile</span>
+            </div>
+            <p style="margin-top: 8px; font-size: 12.5px; color: var(--text-body);">
+              • Baseline: 104,568 mi × $0.18 = <strong>$18,822.24 / day</strong><br>
+              • Optimized: 88,420 mi × $0.18 = <strong>$15,915.60 / day</strong><br>
+              • <strong>Maintenance Savings: $2,906.64 / day</strong>
+            </p>
+          </div>
+        </div>
+
+        <div class="info-box-card">
+          <h3>3. Driver Wages & Overtime Formulas</h3>
+          <div class="formula-card">
+            <div class="formula-header">Base & Overtime Wages Derivation</div>
+            <div class="formula-body">
+              <div style="margin-bottom: 8px;">
+                <span class="eq-main">Shift Duration</span> = 
+                <span class="eq-bracket">(</span><span class="eq-term">Miles</span> ÷ <span class="eq-term">45 mph</span><span class="eq-bracket">)</span> + 
+                <span class="eq-term">Unload Time</span> + 
+                <span class="eq-term">Wait Time</span>
+              </div>
+              <div>
+                <span class="eq-main">Total Wages</span> = 
+                <span class="eq-term">Regular Hours (≤8h) × $28.50</span> + 
+                <span class="eq-term" style="color: var(--color-red);">Overtime Hours (>8h) × $42.75</span>
+              </div>
+            </div>
+          </div>
+          <p style="margin-top: 12px; font-size: 13px; color: var(--text-body);">
+            <strong>Why Driver Base Wages Go Down ($66,060 vs $63,156):</strong><br>
+            1. Lower total fleet driving hours (16,148 miles saved ÷ 45 mph = 358.8 fewer driving hours).<br>
+            2. Fewer total truck runs (92 routes vs 118 routes) eliminates 26 redundant pre-trip inspection and setup hours.<br>
+            3. Dynamic dispatch window alignment eliminates driver wait time outside closed store doors.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- TAB 4: USA INTERACTIVE MAP WITH SHIPMENTS & ROUTE GROUPS            -->
+    <!-- =================================================================== -->
+    <section id="tab-usa-map" class="tab-content">
+      <div class="map-toolbar" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <div>
+            <h2>USA Interactive Map • Route Clustering & Shipments</h2>
+            <p>Shipment points are color-coded by their assigned <strong>Truck Route Group</strong>. Toggle between Optimal vs. Naive planning to see route consolidation vectors.</p>
+          </div>
+          <div class="map-legend">
+            <span class="legend-item"><span class="marker-dot hub-dot"></span> Regional Hubs</span>
+            <span class="legend-item"><span class="marker-dot store-dot"></span> Shipments (Color-Coded by Route)</span>
+            <span class="legend-item"><span class="marker-dot supplier-dot"></span> Supplier Backhauls</span>
+          </div>
+        </div>
+
+        <!-- Interactive Map Controls Bar -->
+        <div style="display: flex; gap: 16px; background: var(--bg-card); padding: 12px 18px; border-radius: 10px; border: 1.5px solid var(--border-color); align-items: center; flex-wrap: wrap;">
+          <div>
+            <label for="map-scenario-select"><strong>📅 Demand Day:</strong></label>
+            <select id="map-scenario-select" onchange="onMapControlChange()" style="padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 13px; font-weight: 700; color: var(--text-dark);">
+              <option value="WED">Wed, Aug 5 (Mid-Week • 107 Orders)</option>
+              <option value="FRI">Fri, Aug 7 (Weekend Peak • 185 Orders)</option>
+              <option value="MON">Mon, Aug 3 (Light Volume • 66 Orders)</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="map-hub-select"><strong>🏢 Regional Hub:</strong></label>
+            <select id="map-hub-select" onchange="onMapControlChange()" style="padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 13px; font-weight: 700; color: var(--text-dark);">
+              <option value="HUB_LOU_KY">Louisville Hub (KY)</option>
+              <option value="ALL">All 11 Regional Hubs (USA)</option>
+              <option value="HUB_ATL_GA">Atlanta Hub (GA)</option>
+              <option value="HUB_DAL_TX">Dallas Hub (TX)</option>
+              <option value="HUB_RAL_NC">Raleigh Hub (NC)</option>
+              <option value="HUB_NJ_NJ">New Jersey Hub (NJ)</option>
+              <option value="HUB_PA_PA">Pennsylvania Hub (PA)</option>
+              <option value="HUB_ORL_FL">Orlando Hub (FL)</option>
+              <option value="HUB_DEN_CO">Denver Hub (CO)</option>
+              <option value="HUB_PHX_AZ">Phoenix Hub (AZ)</option>
+              <option value="HUB_POR_OR">Portland Hub (OR)</option>
+              <option value="HUB_DSM_IA">Des Moines Hub (IA)</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="map-mode-select"><strong>🚛 Planning Mode:</strong></label>
+            <select id="map-mode-select" onchange="onMapControlChange()" style="padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 13px; font-weight: 700; color: var(--text-dark);">
+              <option value="OPTIMAL">✨ Optimal Planning (Consolidated Routes)</option>
+              <option value="NAIVE">⚠️ Naive Baseline (1-Store Direct Routes)</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="map-truck-select"><strong>🚚 Filter Truck:</strong></label>
+            <select id="map-truck-select" onchange="onMapControlChange()" style="padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 13px; font-weight: 700; color: var(--text-dark);">
+              <option value="ALL">All Active Trucks</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="map-shipment-select"><strong>📦 Focus Shipment:</strong></label>
+            <select id="map-shipment-select" onchange="onMapControlChange()" style="padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 13px; font-weight: 700; color: var(--text-dark);">
+              <option value="ALL">All Store Shipments</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="map-tiles-select"><strong>🗺️ Map Engine:</strong></label>
+            <select id="map-tiles-select" onchange="onMapControlChange()" style="padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 13px; font-weight: 700; color: var(--text-dark);">
+              <option value="GOOGLE_ROAD">🗺️ Google Maps Roadmap (Highway Snapped)</option>
+              <option value="GOOGLE_SAT">🛰️ Google Maps Hybrid / Satellite</option>
+              <option value="OSM">📍 OpenStreetMap Classic</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Side-by-Side Map & Gemini AI Chat Split View -->
+      <div class="map-gemini-split-layout">
+        <!-- Left Column: Map View -->
+        <div class="map-container-column">
+          <div id="usa-leaflet-map"></div>
+        </div>
+
+        <!-- Right Column: Permanent Gemini AI Assistant Chat Interface -->
+        <div class="gemini-chat-panel">
+          <div class="gemini-panel-header">
+            <div class="gemini-panel-title">
+              <span class="gemini-sparkle">✨</span>
+              <div>
+                <strong>Gemini Logistics AI Assistant</strong>
+                <div class="gemini-panel-sub">Connected to BigQuery & Optimization Engine</div>
+              </div>
+            </div>
+            <span class="badge success" style="font-size:11px;">Live BigQuery Feed</span>
+          </div>
+
+          <!-- Suggested Query Chips -->
+          <div class="gemini-suggestions-bar">
+            <div class="chip-label">💡 Suggested Fleet Queries:</div>
+            <div class="chips-flex">
+              <button class="chip-btn" onclick="askGemini('Why did Candidate #28 win over Candidate #01?')">Why Candidate #28 won?</button>
+              <button class="chip-btn" onclick="askGemini('Summarize Wednesday store orders for Louisville Hub')">Louisville Wed orders</button>
+              <button class="chip-btn" onclick="askGemini('How much driver overtime is saved in the optimized plan?')">Driver Overtime Savings</button>
+              <button class="chip-btn" onclick="askGemini('List stores ordering above 6,000 lbs in Louisville')">Heavy stores >6,000 lbs</button>
+            </div>
+          </div>
+
+          <!-- Chat Conversation Log -->
+          <div class="gemini-chat-history" id="gemini-chat-history">
+            <div class="chat-bubble assistant-bubble">
+              <div class="bubble-header">✨ <strong>Gemini Assistant</strong></div>
+              <div class="bubble-content">
+                Hello! I'm your Gemini AI Logistics Assistant connected directly to BigQuery dataset <code>vertexsearch-447722:transport_optimization</code>. Ask me anything about store shipments, truck routes, driver hours, fuel costs, or why the optimization engine chose candidate routes!
+              </div>
+            </div>
+          </div>
+
+          <!-- Chat Input Bar -->
+          <div class="gemini-chat-input-container">
+            <input type="text" id="gemini-panel-input" placeholder="Ask Gemini about shipments, trucks, or routes..." onkeydown="if(event.key === 'Enter') sendPanelGeminiQuery()">
+            <button class="gemini-panel-send-btn" onclick="sendPanelGeminiQuery()">Send ✨</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- TAB 5: WHY THIS SOLUTION WON (OBJECTIVE FUNCTION & CANDIDATES)       -->
+    <!-- =================================================================== -->
+    <section id="tab-why-winning" class="tab-content">
+      <div class="winning-header">
+        <h2>Why This Solution Won: Mathematical Objective & Candidate Evolution</h2>
+        <p>Explaining how the baseline plan was derived, the exact optimization objective, and why Candidate #28 was selected as the winning route plan.</p>
+      </div>
+
+      <div class="grid-2col" style="margin-bottom: 24px;">
+        <!-- How Baseline Was Created -->
+        <div class="info-box-card">
+          <h3>1. How the Naive Baseline Plan Was Created</h3>
+          <p>The baseline plan simulates standard manual logistics dispatching rules:</p>
+          <ul class="styled-list">
+            <li><strong>Fixed Primary Hub Allocation:</strong> Stores are strictly assigned to their default primary hub, regardless of whether a neighboring hub is 20+ miles closer.</li>
+            <li><strong>Greedy Nearest-Neighbor Sequence:</strong> Orders are grouped using basic distance, ignoring delivery window start times.</li>
+            <li><strong>Static 01:00 AM Dispatches:</strong> All trucks dispatch at 01:00 AM without adjusting for store key-drop window opening times (`01:00`–`05:00` or `06:00`–`09:00`).</li>
+            <li><strong>Zero Supplier Backhauls:</strong> Trucks return empty to the regional hub after store deliveries, forfeiting $120/leg backhaul revenue credits.</li>
+          </ul>
+        </div>
+
+        <!-- The Objective Function -->
+        <div class="info-box-card">
+          <h3>2. Mathematical Objective Function</h3>
+          <p>The objective function minimizes total net daily operational expense:</p>
+          <div class="formula-card">
+            <div class="formula-header">Goal: Minimize Total Daily Spend ($)</div>
+            <div class="formula-body">
+              <span class="eq-main">Daily Net Spend</span> = 
+              <span class="eq-bracket">[</span>
+              <span class="eq-term">Fuel</span> + 
+              <span class="eq-term">Driver Wages</span> + 
+              <span class="eq-term">Overtime</span> + 
+              <span class="eq-term">Maintenance</span> + 
+              <span class="eq-term">Tolls</span> + 
+              <span class="eq-term">Stop Fees</span>
+              <span class="eq-bracket">]</span>
+              <span class="eq-operator">–</span>
+              <span class="eq-credit">Backhaul Revenue Credits</span>
+            </div>
+          </div>
+          <p style="margin-top: 14px; font-size: 13px;">Subject to strict zero-tolerance feasibility bounds:</p>
+          <ul class="styled-list">
+            <li><strong>Driver Shift Cap:</strong> Duration ≤ 11.0 Hours (660 mins max).</li>
+            <li><strong>Trailer Capacity:</strong> Weight ≤ 42,000 lbs, Pallets ≤ 26.</li>
+            <li><strong>Key-Drop Window:</strong> Arrival strictly inside store delivery window.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Candidate Generation Comparison Table -->
+      <div class="section-card">
+        <h3>3. Candidate Generations Evaluated by Evolutionary Search</h3>
+        <div class="table-container" style="margin-top: 16px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Candidate ID</th>
+                <th>Strategy & Mutated Heuristic</th>
+                <th>Active Drivers</th>
+                <th>Active Trucks</th>
+                <th>Fleet Miles</th>
+                <th>Backhauls</th>
+                <th>Daily Spend ($)</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Candidate #01</strong></td>
+                <td>Naive Baseline (Static Allocation & Fixed Dispatches)</td>
+                <td>142</td>
+                <td>118</td>
+                <td>104,568 mi</td>
+                <td>21</td>
+                <td><strong class="text-red">$285,420</strong></td>
+                <td><span class="badge info">Baseline</span></td>
+              </tr>
+              <tr>
+                <td><strong>Candidate #08</strong></td>
+                <td>Border-Zone Swapping + Capacity Density</td>
+                <td>124</td>
+                <td>102</td>
+                <td>96,210 mi</td>
+                <td>42</td>
+                <td>$268,100</td>
+                <td><span class="badge info">Evaluated</span></td>
+              </tr>
+              <tr>
+                <td><strong>Candidate #15</strong></td>
+                <td>Delivery-Urgency Window Alignment</td>
+                <td>115</td>
+                <td>98</td>
+                <td>91,450 mi</td>
+                <td>60</td>
+                <td>$254,800</td>
+                <td><span class="badge info">Evaluated</span></td>
+              </tr>
+              <tr style="background: var(--bg-green-light); border: 2px solid var(--border-green);">
+                <td><strong style="color: var(--color-green);">Candidate #28 ★</strong></td>
+                <td><strong>Evolved Distance-Savings + Backhaul Detour Matching</strong></td>
+                <td><strong>108</strong></td>
+                <td><strong>92</strong></td>
+                <td><strong>88,420 mi</strong></td>
+                <td><strong>78</strong></td>
+                <td><strong class="text-green">$242,150</strong></td>
+                <td><span class="badge success">🏆 WINNING PLAN</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
