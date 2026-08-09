@@ -198,6 +198,13 @@ A fleet dispatcher operates the system daily using **3 execution triggers**:
 
 ## 💻 Interactive Dispatch Control Center (Web UI)
 
+### **Interactive Leaflet USA Map — Denver Hub () & Route **
+
+![Denver Hub TRK-DEN-803 USA Map Screenshot](dashboard/images/denver_map_trk803.png)
+
+*Figure: Real-time Interactive Leaflet USA Map displaying Denver Regional Hub (), North/East I-70 Corridor Route , Commerce City Grain & Flour Mill ( near Rocky Mountain Arsenal NP), Castle Rock Dairy Processor (), and active telematics metrics (+ 20.00 Backhaul Credit).*
+
+
 The Dispatch Control Center is a single-page web dashboard served by `server.py`:
 
 ```
